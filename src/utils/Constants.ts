@@ -309,6 +309,29 @@ export enum GameState {
     PAUSED
 }
 
+// 難易度レベル
+export enum Difficulty {
+    EASY,
+    NORMAL,
+    HARD
+}
+
+// 難易度ごとのゲームパラメータ倍率 (NORMALを基準とする)
+export const DIFFICULTY_MULTIPLIERS = {
+    [Difficulty.EASY]: {
+        invaderMoveInterval: 1.5, // 移動が遅くなる
+        invaderShootInterval: 1.5 // 弾の発射頻度が下がる
+    },
+    [Difficulty.NORMAL]: {
+        invaderMoveInterval: 1.0,
+        invaderShootInterval: 1.0
+    },
+    [Difficulty.HARD]: {
+        invaderMoveInterval: 0.7, // 移動が速くなる
+        invaderShootInterval: 0.7 // 弾の発射頻度が上がる
+    }
+};
+
 // 爆発エフェクトスプライトデータ (例: 16x16ピクセル、複数フレーム)
 export const EXPLOSION_SPRITES = [
     // フレーム 1

@@ -3,6 +3,7 @@ import { Rectangle } from "../utils/Rectangle";
 import { Invader, InvaderType } from "./Invader";
 import { Bullet } from "./Bullet"; // Bulletクラスをインポート
 import { Barrier } from "./Barrier"; // Barrierクラスをインポート
+import { Difficulty, DIFFICULTY_MULTIPLIERS } from "../utils/Constants"; // Difficulty, DIFFICULTY_MULTIPLIERSをインポート
 
 export class InvaderGrid {
     private invaders: Invader[][] = [];
@@ -27,11 +28,13 @@ export class InvaderGrid {
     private timeSinceLastShoot = 0; // 最後に弾を発射してからの時間
 
     private spawnedBullets: Bullet[] = []; // 発射された弾を一時的に保持するリスト
+    private difficulty: Difficulty; // 難易度レベルを保持
 
-    constructor() {
+    constructor(difficulty: Difficulty) {
+        this.difficulty = difficulty; // 難易度を設定
         this.createInvaders();
         this.resetShootTimer(); // 最初の弾発射タイマーを設定
-        this.updateMoveInterval(); // Calculate initial move interval
+        this.updateMoveInterval(); // Calculate initial move interval based on difficulty
     }
 
     private createInvaders(): void {
@@ -214,25 +217,28 @@ export class InvaderGrid {
     private updateMoveInterval(): void {
         const aliveCount = this.countAliveInvaders();
         // オリジナルのスペースインベーダーの速度変化を模倣
-        // 残存数に応じた移動間隔 (ms) - 参考値
-        let interval = 1000; // 初期値 (55体)
+        // 残存数に応じた基本移動間隔 (ms) - 参考値
+        let baseInterval = 1000; // 初期値 (55体)
 
         if (aliveCount <= 1) {
-            interval = 50; // 1体以下で最速
+            baseInterval = 50; // 1体以下で最速
         } else if (aliveCount <= 10) {
-            interval = 100;
+            baseInterval = 100;
         } else if (aliveCount <= 20) {
-            interval = 200;
+            baseInterval = 200;
         } else if (aliveCount <= 30) {
-            interval = 400;
+            baseInterval = 400;
         } else if (aliveCount <= 40) {
-            interval = 600;
+            baseInterval = 600;
         } else if (aliveCount <= 50) {
-            interval = 800;
+            baseInterval = 800;
         }
 
-        this.currentMoveInterval = interval;
-        console.log("Alive Invaders: " + aliveCount + ", Move Interval: " + this.currentMoveInterval.toFixed(2) + "ms");
+        // 難易度に応じた倍率を適用
+        const difficultyMultiplier = DIFFICULTY_MULTIPLIERS[this.difficulty].invaderMoveInterval;
+        this.currentMoveInterval = baseInterval * difficultyMultiplier;
+
+        console.log("Alive Invaders: " + aliveCount + ", Move Interval: " + this.currentMoveInterval.toFixed(2) + "ms" + " (Difficulty: " + Difficulty[this.difficulty] + ")");
     }
 
     // ランダムなインベーダーに弾を発射させる
@@ -266,9 +272,13 @@ export class InvaderGrid {
 
     // 次の弾発射までの時間をランダムに設定
     private resetShootTimer(): void {
-        // TODO: 弾発射間隔のランダム性を調整
-        this.currentShootInterval = this.BASE_SHOOT_INTERVAL + Math.random() * 1000; // 例: 1秒から2秒の間
+        // 基本の発射間隔に難易度に応じた倍率とランダム性を適用
+        const difficultyMultiplier = DIFFICULTY_MULTIPLIERS[this.difficulty].invaderShootInterval;
+        // ランダムな間隔を基本間隔に加算 (例: 基本間隔の0%から100%の間でランダムに加算)
+        const randomDelay = Math.random() * this.BASE_SHOOT_INTERVAL;
+        this.currentShootInterval = (this.BASE_SHOOT_INTERVAL + randomDelay) * difficultyMultiplier;
         this.timeSinceLastShoot = 0;
+        console.log("Next invader shoot interval: " + this.currentShootInterval.toFixed(2) + "ms" + " (Difficulty: " + Difficulty[this.difficulty] + ")");
     }
 
     // Gameクラスから呼び出して、発射された弾のリストを取得するメソッド

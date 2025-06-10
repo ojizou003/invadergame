@@ -7,7 +7,7 @@ import { Barrier } from "./Barrier";
 import { Rectangle } from "../utils/Rectangle";
 import { UFO } from "./UFO"; // UFOクラスをインポート
 import { ScoreDisplay } from "./ScoreDisplay"; // ScoreDisplayクラスをインポート
-import { GameState } from "../utils/Constants"; // GameState enumをインポート
+import { GameState, Difficulty } from "../utils/Constants"; // GameState, Difficulty enumをインポート
 import { SoundEngine } from "../audio/SoundEngine"; // SoundEngineクラスをインポート
 import { Explosion } from "./Explosion"; // Explosionクラスをインポート
 import { ScorePopup } from "./ScorePopup"; // ScorePopupクラスをインポート
@@ -38,6 +38,7 @@ export class Game {
     private readonly FRAME_TIME = 1000 / this.TARGET_FPS;
 
     private gameState: GameState = GameState.PLAYING; // ゲーム状態を追加
+    private currentDifficulty: Difficulty = Difficulty.NORMAL; // 現在の難易度を追加
 
     constructor(canvasId: string) {
         this.canvas = document.getElementById(canvasId) as HTMLCanvasElement;
@@ -54,7 +55,7 @@ export class Game {
         // Create game objects
         this.playerBullet = new Bullet(); // Create player's bullet
         this.player = new Player(224 / 2, 256 - 20, this.playerBullet); // Center horizontally, near bottom
-        this.invaderGrid = new InvaderGrid();
+        this.invaderGrid = new InvaderGrid(this.currentDifficulty); // Pass difficulty to InvaderGrid
         this.ufo = new UFO(); // UFOインスタンスを作成
         this.scoreDisplay = new ScoreDisplay(); // ScoreDisplayインスタンスを作成
 
@@ -156,6 +157,7 @@ export class Game {
     }
 
     private render(): void {
+        console.log("render called"); // デバッグログ
         // Clear canvas
         this.renderer.clear();
 
@@ -290,7 +292,7 @@ export class Game {
         // ゲームオブジェクトを初期状態に戻す
         // 既存のインスタンスを再利用または新しく作成
         this.player = new Player(224 / 2, 256 - 20, this.playerBullet); // プレイヤーを初期位置に戻す (新しいインスタンスを作成)
-        this.invaderGrid = new InvaderGrid(); // インベーダーグリッドを再作成
+        this.invaderGrid = new InvaderGrid(this.currentDifficulty); // インベーダーグリッドを再作成 (難易度を渡す)
         this.ufo = new UFO(); // UFOを再作成
         this.scoreDisplay = new ScoreDisplay(); // スコアディスプレイを再作成 (スコアがリセットされる)
 
@@ -321,5 +323,10 @@ export class Game {
         this.invaderBullets = [];
 
         // TODO: サウンドのリセットなど
+    }
+
+    // main.tsから呼び出され、RendererにCanvasサイズ変更を通知する
+    setCanvasSize(width: number, height: number): void {
+        this.renderer.setCanvasSize(width, height);
     }
 }

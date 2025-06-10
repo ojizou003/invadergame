@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Space Invaders</title>
+    <link rel="manifest" href="/manifest.json"> <!-- Web App Manifest を参照 -->
     <style>
         body {
             display: flex;
@@ -14,12 +15,17 @@
             margin: 0;
         }
         canvas {
+            display: block; /* 中央寄せのためにブロック要素にする */
+            margin: auto; /* 中央寄せ */
             border: 1px solid #fff;
+            max-width: 100%; /* 親要素の幅に合わせる */
+            max-height: 100vh; /* ビューポートの高さに合わせる */
+            /* アスペクト比を維持するために width と height は設定しない */
         }
     </style>
 </head>
 <body>
     <canvas id="gameCanvas"></canvas>
-    <script type="module" src="/src/main.ts"></script>
+    <script type="module" src="./src/main.ts"></script> <!-- パスを修正 -->
 </body>
 </html>
