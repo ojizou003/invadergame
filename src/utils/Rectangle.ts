@@ -18,4 +18,12 @@ export class Rectangle {
                this.y < other.y + other.height &&
                this.y + this.height > other.y;
     }
+
+    // Check if a point is inside the rectangle
+    contains(x: number, y: number): boolean {
+        return x >= this.x &&
+               x < this.x + this.width &&
+               y >= this.y &&
+               y < this.y + this.height;
+    }
 }

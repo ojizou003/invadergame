@@ -8,6 +8,9 @@ import { Rectangle } from "../utils/Rectangle";
 import { UFO } from "./UFO"; // UFOクラスをインポート
 import { ScoreDisplay } from "./ScoreDisplay"; // ScoreDisplayクラスをインポート
 import { GameState } from "../utils/Constants"; // GameState enumをインポート
+import { SoundEngine } from "../audio/SoundEngine"; // SoundEngineクラスをインポート
+import { Explosion } from "./Explosion"; // Explosionクラスをインポート
+import { ScorePopup } from "./ScorePopup"; // ScorePopupクラスをインポート
 
 export class Game {
     private canvas: HTMLCanvasElement;
@@ -20,6 +23,10 @@ export class Game {
     private barriers: Barrier[] = []; // Array to hold barrier instances
     private ufo: UFO; // UFOインスタンスを追加
     private scoreDisplay: ScoreDisplay; // ScoreDisplayインスタンスを追加
+    private soundEngine: SoundEngine; // SoundEngineインスタンスを追加
+    private explosions: Explosion[] = []; // 爆発エフェクトのリストを追加
+    private scorePopups: ScorePopup[] = []; // スコアポップアップのリストを追加
+    private invaderBullets: Bullet[] = []; // インベーダーの弾のリストを追加
 
     private ufoSpawnTimer: number = 0; // UFO出現用タイマー
     private readonly UFO_SPAWN_INTERVAL_MIN: number = 15000; // UFO出現最小間隔 (ms)
@@ -42,6 +49,7 @@ export class Game {
         // Rendererにcanvasサイズを渡す
         this.renderer = new Renderer(this.ctx, this.canvas.width, this.canvas.height);
         this.inputManager = new InputManager();
+        this.soundEngine = new SoundEngine(); // SoundEngineインスタンスを作成
         
         // Create game objects
         this.playerBullet = new Bullet(); // Create player's bullet
@@ -100,6 +108,16 @@ export class Game {
         this.playerBullet.update(deltaTime);
         this.ufo.update(deltaTime); // UFOを更新
 
+        // インベーダーの弾を更新
+        this.invaderBullets.forEach(bullet => bullet.update(deltaTime));
+        // 画面外に出たインベーダーの弾を削除
+        this.invaderBullets = this.invaderBullets.filter(bullet => bullet.alive);
+
+        // InvaderGridから新しく発射された弾を取得して追加
+        const newInvaderBullets = this.invaderGrid.getInvaderBullets();
+        this.invaderBullets.push(...newInvaderBullets);
+
+
         // UFO出現ロジック
         if (!this.ufo.alive) {
             this.ufoSpawnTimer += deltaTime;
@@ -113,8 +131,20 @@ export class Game {
         // Check for collisions
         this.checkCollisions();
 
+        // Check for invader-barrier collisions and damage barriers
+        this.invaderGrid.checkBarrierCollision(this.barriers);
+
         // Remove destroyed barriers
         this.barriers = this.barriers.filter(barrier => !barrier.isDestroyed());
+
+
+        // 爆発エフェクトの更新と不要なエフェクトの削除
+        this.explosions.forEach(explosion => explosion.update(deltaTime));
+        this.explosions = this.explosions.filter(explosion => explosion.alive);
+
+        // スコアポップアップの更新と不要なポップアップの削除
+        this.scorePopups.forEach(popup => popup.update(deltaTime));
+        this.scorePopups = this.scorePopups.filter(popup => popup.alive);
 
         // 敗北条件判定
         if (this.invaderGrid.hasReachedBottom() || this.player.getLives() <= 0) {
@@ -122,7 +152,6 @@ export class Game {
             console.log("Game Over!");
         }
 
-        // TODO: Implement invader bullets and their collisions
         // TODO: Check for win condition (all invaders killed)
     }
 
@@ -137,8 +166,15 @@ export class Game {
                 this.player.render(this.renderer);
                 this.invaderGrid.render(this.renderer);
                 this.playerBullet.render(this.renderer);
+                this.invaderBullets.forEach(bullet => bullet.render(this.renderer)); // インベーダーの弾を描画
                 this.barriers.forEach(barrier => barrier.render(this.renderer));
                 this.ufo.render(this.renderer); // UFOを描画
+
+                // 爆発エフェクトを描画
+                this.explosions.forEach(explosion => explosion.render(this.renderer));
+
+                // スコアポップアップを描画
+                this.scorePopups.forEach(popup => popup.render(this.renderer));
 
                 // スコア表示
                 this.scoreDisplay.render(this.renderer);
@@ -152,7 +188,7 @@ export class Game {
                 // ゲームオーバー画面の描画
                 this.renderer.drawBitmapText("GAME OVER", 70, 120); // 仮の表示位置
                 this.scoreDisplay.render(this.renderer); // ゲームオーバー画面でもスコアは表示
-                // TODO: リスタート指示などを表示
+                this.renderer.drawBitmapText("PRESS 'R' TO RESTART", 30, 140); // リスタート指示
                 break;
 
             // TODO: 他のゲーム状態 (MENU, PAUSED) の描画
@@ -168,6 +204,9 @@ export class Game {
                 hitInvader.hit();
                 // スコア加算
                 this.scoreDisplay.addScore(hitInvader.getScoreValue());
+                this.soundEngine.playExplosionSound(); // 爆発音再生
+                // 爆発エフェクト生成
+                this.explosions.push(new Explosion(hitInvader.position.x + hitInvader.getBounds().width / 2, hitInvader.position.y + hitInvader.getBounds().height / 2));
             }
         }
 
@@ -183,6 +222,8 @@ export class Game {
                      if (barrier.checkPixelCollision(hitX, hitY)) {
                         barrier.takeDamage(hitX, hitY);
                         this.playerBullet.hit();
+                        // TODO: バリア破壊音
+                        // TODO: バリア破壊エフェクト
                         break; // Bullet can only hit one barrier
                      }
                 }
@@ -196,16 +237,47 @@ export class Game {
                 const score = this.ufo.hit();
                 // スコア加算
                 this.scoreDisplay.addScore(score);
+                this.soundEngine.playUFOSound(); // UFO音再生 (撃破時だが、仮で)
+                // 爆発エフェクト生成
+                this.explosions.push(new Explosion(this.ufo.position.x + this.ufo.getBounds().width / 2, this.ufo.position.y + this.ufo.getBounds().height / 2));
+                // スコアポップアップ生成
+                this.scorePopups.push(new ScorePopup(this.ufo.position.x + this.ufo.getBounds().width / 2, this.ufo.position.y + this.ufo.getBounds().height / 2, score));
             }
         }
 
-        // TODO: Invader bullets vs Player (衝突判定の枠組み)
-        // if (invaderBullet.alive && this.player.getBounds().intersects(invaderBullet.getBounds())) {
-        //     invaderBullet.hit();
-        //     this.player.hit(); // プレイヤーが被弾
-        // }
+        // Invader bullets vs Player
+        for (const invaderBullet of this.invaderBullets) {
+            if (invaderBullet.alive && this.player.getBounds().intersects(invaderBullet.getBounds())) {
+                invaderBullet.hit();
+                this.player.hit(); // プレイヤーが被弾
+                this.soundEngine.playPlayerDeathSound(); // プレイヤー死亡音再生 (TODO: 要実装)
+                // TODO: プレイヤー被弾エフェクト
+                break; // Player can only be hit by one bullet at a time (simplification)
+            }
+        }
 
-        // TODO: Invader bullets vs Barriers
+        // Invader bullets vs Barriers
+        for (const invaderBullet of this.invaderBullets) {
+            if (invaderBullet.alive) {
+                for (const barrier of this.barriers) {
+                    if (barrier.getBounds().intersects(invaderBullet.getBounds())) {
+                        // Check pixel-perfect collision
+                        const hitX = invaderBullet.position.x + invaderBullet.getBounds().width / 2;
+                        const hitY = invaderBullet.position.y + invaderBullet.getBounds().height; // Check bottom of invader bullet
+
+                        if (barrier.checkPixelCollision(hitX, hitY)) {
+                            barrier.takeDamage(hitX, hitY);
+                            invaderBullet.hit();
+                            // TODO: バリア破壊音
+                            // TODO: バリア破壊エフェクト
+                            break; // Bullet can only hit one barrier
+                        }
+                    }
+                }
+            }
+        }
+
+
         // TODO: Invaders vs Player (game over condition)
         // TODO: Invaders vs Barriers
     }
@@ -238,6 +310,15 @@ export class Game {
         // 必要に応じてタイマーなどもリセット
         this.ufoSpawnTimer = 0;
         this.nextUfoSpawnTime = Math.random() * (this.UFO_SPAWN_INTERVAL_MAX - this.UFO_SPAWN_INTERVAL_MIN) + this.UFO_SPAWN_INTERVAL_MIN;
+
+        // 爆発エフェクトリストをクリア
+        this.explosions = [];
+
+        // スコアポップアップリストをクリア
+        this.scorePopups = [];
+
+        // インベーダーの弾リストをクリア
+        this.invaderBullets = [];
 
         // TODO: サウンドのリセットなど
     }

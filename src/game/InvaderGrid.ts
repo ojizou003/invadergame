@@ -1,7 +1,8 @@
-import { Renderer } from "../graphics/Renderer"; // パス修正
-import { Rectangle } from "../utils/Rectangle"; // パス修正
-import { Invader } from "./Invader";
-import { InvaderType } from "./Invader";
+import { Renderer } from "../graphics/Renderer";
+import { Rectangle } from "../utils/Rectangle";
+import { Invader, InvaderType } from "./Invader";
+import { Bullet } from "./Bullet"; // Bulletクラスをインポート
+import { Barrier } from "./Barrier"; // Barrierクラスをインポート
 
 export class InvaderGrid {
     private invaders: Invader[][] = [];
@@ -20,9 +21,16 @@ export class InvaderGrid {
     private horizontalMoveTimer = 0;
     private moveToggle = 0; // Used to alternate sprite frames for animation
 
+    private shootTimer = 0; // インベーダーの弾発射用タイマー
+    private readonly BASE_SHOOT_INTERVAL = 1000; // 弾発射の基本間隔 (ms)
+    private currentShootInterval = this.BASE_SHOOT_INTERVAL; // 現在の弾発射間隔
+    private timeSinceLastShoot = 0; // 最後に弾を発射してからの時間
+
+    private spawnedBullets: Bullet[] = []; // 発射された弾を一時的に保持するリスト
 
     constructor() {
         this.createInvaders();
+        this.resetShootTimer(); // 最初の弾発射タイマーを設定
         this.updateMoveInterval(); // Calculate initial move interval
     }
 
@@ -49,6 +57,7 @@ export class InvaderGrid {
     update(deltaTime: number): void {
         this.timeSinceLastMove += deltaTime;
         this.horizontalMoveTimer += deltaTime;
+        this.timeSinceLastShoot += deltaTime; // 弾発射タイマーを更新
 
         // Check if it's time for the invaders to move horizontally
         if (this.horizontalMoveTimer >= this.currentMoveInterval) {
@@ -63,6 +72,12 @@ export class InvaderGrid {
                     }
                 }
             }
+        }
+
+        // Check if it's time for an invader to shoot
+        if (this.timeSinceLastShoot >= this.currentShootInterval) {
+            this.attemptToShoot(); // 弾発射を試みる
+            this.resetShootTimer(); // 次の弾発射タイマーを設定
         }
 
         // Individual invader update is not needed for movement in this grid-based system.
@@ -154,6 +169,34 @@ export class InvaderGrid {
         return null; // No invader was hit
     }
 
+    // Check for collision with barriers and damage them
+    checkBarrierCollision(barriers: Barrier[]): void {
+        for (let row = 0; row < this.rows; row++) {
+            for (let col = 0; col < this.cols; col++) {
+                const invader = this.invaders[row][col];
+                if (invader.alive) {
+                    const invaderBounds = invader.getBounds();
+                    for (const barrier of barriers) {
+                        // Check if invader bounds intersect with barrier bounds
+                        if (barrier.getBounds().intersects(invaderBounds)) {
+                            // If they intersect, check pixel-by-pixel within the invader's bounds
+                            // to see which barrier pixels are hit.
+                            for (let y = Math.floor(invaderBounds.y); y < Math.ceil(invaderBounds.y + invaderBounds.height); y++) {
+                                for (let x = Math.floor(invaderBounds.x); x < Math.ceil(invaderBounds.x + invaderBounds.width); x++) {
+                                    // Check if this pixel is within the barrier's bounds and is still "alive"
+                                    if (barrier.getBounds().contains(x, y) && barrier.checkPixelCollision(x, y)) {
+                                        // If it is, damage the barrier at this pixel location
+                                        barrier.takeDamage(x, y);
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
     // Calculate the current number of alive invaders
     private countAliveInvaders(): number {
         let count = 0;
@@ -190,5 +233,48 @@ export class InvaderGrid {
 
         this.currentMoveInterval = interval;
         console.log("Alive Invaders: " + aliveCount + ", Move Interval: " + this.currentMoveInterval.toFixed(2) + "ms");
+    }
+
+    // ランダムなインベーダーに弾を発射させる
+    private attemptToShoot(): void {
+        const aliveInvaders: { row: number, col: number }[] = [];
+        // 生きているインベーダーの中で、各列の最下段のインベーダーを探す
+        const lowestInvaders: { row: number, col: number }[] = [];
+        for (let col = 0; col < this.cols; col++) {
+            for (let row = this.rows - 1; row >= 0; row--) {
+                if (this.invaders[row][col].alive) {
+                    lowestInvaders.push({ row, col });
+                    break; // その列の最下段を見つけたら次の列へ
+                }
+            }
+        }
+
+        if (lowestInvaders.length === 0) {
+            return; // 生きているインベーダーがいない
+        }
+
+        // 最下段のインベーダーの中からランダムに1体選ぶ
+        const randomIndex = Math.floor(Math.random() * lowestInvaders.length);
+        const shooter = this.invaders[lowestInvaders[randomIndex].row][lowestInvaders[randomIndex].col];
+
+        // 弾を生成し、リストに追加
+        const bullet = new Bullet(shooter.position.x + shooter.getBounds().width / 2, shooter.position.y + shooter.getBounds().height);
+        bullet.setVelocity(0, 5); // 下向きに速度を設定 (仮)
+        this.spawnedBullets.push(bullet);
+        console.log(`Invader at [${lowestInvaders[randomIndex].row}, ${lowestInvaders[randomIndex].col}] shot a bullet.`);
+    }
+
+    // 次の弾発射までの時間をランダムに設定
+    private resetShootTimer(): void {
+        // TODO: 弾発射間隔のランダム性を調整
+        this.currentShootInterval = this.BASE_SHOOT_INTERVAL + Math.random() * 1000; // 例: 1秒から2秒の間
+        this.timeSinceLastShoot = 0;
+    }
+
+    // Gameクラスから呼び出して、発射された弾のリストを取得するメソッド
+    getInvaderBullets(): Bullet[] {
+        const bullets = [...this.spawnedBullets];
+        this.spawnedBullets = []; // リストをクリア
+        return bullets;
     }
 }

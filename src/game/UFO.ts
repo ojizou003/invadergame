@@ -47,8 +47,10 @@ export class UFO {
     // UFOが撃破された際に呼び出すメソッド
     hit(): number {
         this.alive = false;
-        // TODO: ランダムなスコアを返す (50, 100, 150, 300)
-        console.log("UFO hit!"); // Placeholder
-        return 150; // 仮のスコア
+        console.log("UFO hit!");
+        // ランダムなスコアを返す (50, 100, 150, 300)
+        const possibleScores = [50, 100, 150, 300];
+        const randomIndex = Math.floor(Math.random() * possibleScores.length);
+        return possibleScores[randomIndex];
     }
 }
